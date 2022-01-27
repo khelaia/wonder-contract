@@ -1,0 +1,384 @@
+pragma solidity ^0.5.12;
+import "./SafeMath.sol";
+import "./IERC721.sol";
+import "./IERC721Receiver.sol";
+
+contract WonderContract is IERC721 {
+    using SafeMath for uint256;
+
+    struct Wonder {
+        string name;
+        uint256 genes;
+        uint64 birthTime;
+        uint64 cooldownEndTime;
+        uint32 mumId;
+        uint32 dadId;
+        uint16 generation;
+        uint16 cooldownIndex;
+    }
+
+    Wonder[] internal wonders;
+    string _tokenName = "Wonders NFT";
+    string _tokenSymbol = "WON";
+
+    bytes4 internal constant MAGIC_ERC721_RECEIVED = bytes4(
+        keccak256("onERC721Received(address,address,uint256,bytes)")
+    );
+    bytes4 _INTERFACE_ID_ERC165 = 0x01ffc9a7;
+    bytes4 _INTERFACE_ID_ERC721 = 0x80ac58cd;
+
+    mapping(uint256 => address) internal WonderToOwner;
+    mapping(address => uint256) internal ownerWonderCount;
+    mapping(uint256 => address) public WonderToApproved;
+    mapping(address => mapping(address => bool)) private _operatorApprovals;
+
+    constructor() public {
+        wonders.push(
+            Wonder({
+                name:'',
+                genes: 0,
+                birthTime: 0,
+                cooldownEndTime: 0,
+                mumId: 0,
+                dadId: 0,
+                generation: 0,
+                cooldownIndex: 0
+            })
+        );
+    }
+    function tokenURI(string memory _tokenId) public pure returns (string memory url){
+        url = string(abi.encodePacked("https://ipfs.io/ipfs/QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/",_tokenId));
+    }
+    function supportsInterface(bytes4 _interfaceId)
+        external
+        view
+        returns (bool)
+    {
+        return (_interfaceId == _INTERFACE_ID_ERC165 ||
+            _interfaceId == _INTERFACE_ID_ERC721);
+    }
+
+    /// @dev throws if @param _address is the zero address
+    modifier notZeroAddress(address _address) {
+        require(_address != address(0), "zero address");
+        _;
+    }
+
+    /// @dev throws if @param _WonderId has not been created
+    modifier validWonderId(uint256 _WonderId) {
+        require(_WonderId < wonders.length, "invalid WonderId");
+        _;
+    }
+
+    /// @dev throws if msg.sender does not own @param _WonderId
+    modifier onlyWonderOwner(uint256 _WonderId) {
+        require(isWonderOwner(_WonderId), "sender not Wonder owner");
+        _;
+    }
+
+    /// @dev throws if msg.sender is not the Wonder owner,
+    /// approved, or an approved operator
+    modifier onlyApproved(uint256 _WonderId) {
+        require(
+            isWonderOwner(_WonderId) ||
+                isApproved(_WonderId) ||
+                isApprovedOperatorOf(_WonderId),
+            "sender not Wonder owner OR approved"
+        );
+        _;
+    }
+
+    /**
+     * @dev Returns the Wonder for the given WonderId
+     */
+    function getWonder(uint256 _WonderId)
+        external
+        view
+        returns (
+            string memory name,
+            uint256 WonderId,
+            uint256 genes,
+            uint64 birthTime,
+            uint64 cooldownEndTime,
+            uint32 mumId,
+            uint32 dadId,
+            uint16 generation,
+            uint16 cooldownIndex,
+            address owner
+        )
+    {
+        Wonder storage Wonder = wonders[_WonderId];
+        name = Wonder.name;
+        WonderId = _WonderId;
+        genes = Wonder.genes;
+        birthTime = Wonder.birthTime;
+        cooldownEndTime = Wonder.cooldownEndTime;
+        mumId = Wonder.mumId;
+        dadId = Wonder.dadId;
+        generation = Wonder.generation;
+        cooldownIndex = Wonder.cooldownIndex;
+        owner = WonderToOwner[_WonderId];
+    }
+
+    /**
+     * @dev Returns the number of tokens in ``owner``'s account.
+     */
+    function balanceOf(address owner) external view returns (uint256 balance) {
+        return ownerWonderCount[owner];
+    }
+
+    /*
+     * @dev Returns the total number of tokens in circulation.
+     */
+    function totalSupply() external view returns (uint256 total) {
+        // is the UnWonder considered part of the supply?
+        return wonders.length - 1;
+    }
+
+    /**
+     * @dev Returns the name of the token.
+     */
+    function name() external view returns (string memory tokenName) {
+        return _tokenName;
+    }
+
+    /*
+     * @dev Returns the symbol of the token.
+     */
+    function symbol() external view returns (string memory tokenSymbol) {
+        return _tokenSymbol;
+    }
+
+    /**
+     * @dev Returns the owner of the `tokenId` token.
+     *
+     * Requirements:
+     *
+     * - `tokenId` must exist.
+     */
+    function ownerOf(uint256 _tokenId)
+        external
+        view
+        validWonderId(_tokenId)
+        returns (address owner)
+    {
+        return _ownerOf(_tokenId);
+    }
+
+    function _ownerOf(uint256 _tokenId) internal view returns (address owner) {
+        return WonderToOwner[_tokenId];
+    }
+
+    function isWonderOwner(uint256 _WonderId) public view returns (bool) {
+        return msg.sender == _ownerOf(_WonderId);
+    }
+
+    /** @dev Transfers `tokenId` token from `msg.sender` to `to`.
+     *
+     *
+     * Requirements:
+     *
+     * - `to` cannot be the zero address.
+     * - `to` can not be the contract address.
+     * - `tokenId` token must be owned by `msg.sender`.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transfer(address _to, uint256 _tokenId)
+        external
+        onlyApproved(_tokenId)
+        notZeroAddress(_to)
+    {
+        require(_to != address(this), "to contract address");
+
+        _transfer(msg.sender, _to, _tokenId);
+    }
+
+    function _transfer(
+        address _from,
+        address _to,
+        uint256 _tokenId
+    ) internal {
+        // assign new owner
+        WonderToOwner[_tokenId] = _to;
+
+        //update token counts
+        ownerWonderCount[_to] = ownerWonderCount[_to].add(1);
+
+        if (_from != address(0)) {
+            ownerWonderCount[_from] = ownerWonderCount[_from].sub(1);
+        }
+
+        // emit Transfer event
+        emit Transfer(_from, _to, _tokenId);
+    }
+
+    /// @notice Change or reaffirm the approved address for an NFT
+    /// @dev The zero address indicates there is no approved address.
+    ///  Throws unless `msg.sender` is the current NFT owner, or an authorized
+    ///  operator of the current owner.
+    /// @param _approved The new approved NFT controller
+    /// @param _tokenId The NFT to approve
+    function approve(address _approved, uint256 _tokenId)
+        external
+        onlyApproved(_tokenId)
+    {
+        WonderToApproved[_tokenId] = _approved;
+        emit Approval(msg.sender, _approved, _tokenId);
+    }
+
+    function isApproved(uint256 _WonderId) public view returns (bool) {
+        return msg.sender == WonderToApproved[_WonderId];
+    }
+
+    /// @notice Enable or disable approval for a third party ("operator") to manage
+    ///  all of `msg.sender`'s assets
+    /// @dev Emits the ApprovalForAll event. The contract MUST allow
+    ///  multiple operators per owner.
+    /// @param _operator Address to add to the set of authorized operators
+    /// @param _approved True if the operator is approved, false to revoke approval
+    function setApprovalForAll(address _operator, bool _approved) external {
+        _operatorApprovals[msg.sender][_operator] = _approved;
+        emit ApprovalForAll(msg.sender, _operator, _approved);
+    }
+
+    /// @notice Get the approved address for a single NFT
+    /// @dev Throws if `_tokenId` is not a valid NFT.
+    /// @param _tokenId The NFT to find the approved address for
+    /// @return The approved address for this NFT, or the zero address if there is none
+    function getApproved(uint256 _tokenId)
+        external
+        view
+        validWonderId(_tokenId)
+        returns (address)
+    {
+        return WonderToApproved[_tokenId];
+    }
+
+    /// @notice Query if an address is an authorized operator for another address
+    /// @param _owner The address that owns the NFTs
+    /// @param _operator The address that acts on behalf of the owner
+    /// @return True if `_operator` is an approved operator for `_owner`, false otherwise
+    function isApprovedForAll(address _owner, address _operator)
+        external
+        view
+        returns (bool)
+    {
+        return _isApprovedForAll(_owner, _operator);
+    }
+
+    function _isApprovedForAll(address _owner, address _operator)
+        internal
+        view
+        returns (bool)
+    {
+        return _operatorApprovals[_owner][_operator];
+    }
+
+    /// @return True if msg.sender is the owner, approved,
+    /// or an approved operator for the Wonder
+    /// @param _WonderId id of the Wonder
+    function isApprovedOperatorOf(uint256 _WonderId) public view returns (bool) {
+        return _isApprovedForAll(WonderToOwner[_WonderId], msg.sender);
+    }
+
+    function _safeTransfer(
+        address _from,
+        address _to,
+        uint256 _tokenId,
+        bytes memory _data
+    ) internal {
+        _transfer(_from, _to, _tokenId);
+        require(_checkERC721Support(_from, _to, _tokenId, _data));
+    }
+
+    function _checkERC721Support(
+        address _from,
+        address _to,
+        uint256 _tokenId,
+        bytes memory _data
+    ) internal returns (bool) {
+        if (!_isContract(_to)) {
+            return true;
+        }
+
+        //call onERC721Recieved in the _to contract
+        bytes4 result = IERC721Receiver(_to).onERC721Received(
+            msg.sender,
+            _from,
+            _tokenId,
+            _data
+        );
+
+        //check return value
+        return result == MAGIC_ERC721_RECEIVED;
+    }
+
+    function _isContract(address _to) internal view returns (bool) {
+        // wallets will not have any code but contract must have some code
+        uint32 size;
+        assembly {
+            size := extcodesize(_to)
+        }
+        return size > 0;
+    }
+
+    /// @notice Transfers the ownership of an NFT from one address to another address
+    /// @dev Throws unless `msg.sender` is the current owner, an authorized
+    ///  operator, or the approved address for this NFT. Throws if `_from` is
+    ///  not the current owner. Throws if `_to` is the zero address. Throws if
+    ///  `_tokenId` is not a valid NFT. When transfer is complete, this function
+    ///  checks if `_to` is a smart contract (code size > 0). If so, it calls
+    ///  `onERC721Received` on `_to` and throws if the return value is not
+    ///  `bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"))`.
+    /// @param _from The current owner of the NFT
+    /// @param _to The new owner
+    /// @param _tokenId The NFT to transfer
+    /// @param _data Additional data with no specified format, sent in call to `_to`
+    function safeTransferFrom(
+        address _from,
+        address _to,
+        uint256 _tokenId,
+        bytes calldata _data
+    ) external onlyApproved(_tokenId) notZeroAddress(_to) {
+        require(_from == _ownerOf(_tokenId), "from address not Wonder owner");
+        _safeTransfer(_from, _to, _tokenId, _data);
+    }
+
+    /// @notice Transfers the ownership of an NFT from one address to another address
+    /// @dev This works identically to the other function with an extra data parameter,
+    ///  except this function just sets data to "".
+    /// @param _from The current owner of the NFT
+    /// @param _to The new owner
+    /// @param _tokenId The NFT to transfer
+    function safeTransferFrom(
+        address _from,
+        address _to,
+        uint256 _tokenId
+    ) external onlyApproved(_tokenId) notZeroAddress(_to) {
+        require(_from == _ownerOf(_tokenId), "from address not Wonder owner");
+        _safeTransfer(_from, _to, _tokenId, bytes(""));
+    }
+
+    /// @notice Transfer ownership of an NFT -- THE CALLER IS RESPONSIBLE
+    ///  TO CONFIRM THAT `_to` IS CAPABLE OF RECEIVING NFTS OR ELSE
+    ///  THEY MAY BE PERMANENTLY LOST
+    /// @dev Throws unless `msg.sender` is the current owner, an authorized
+    ///  operator, or the approved address for this NFT. Throws if `_from` is
+    ///  not the current owner. Throws if `_to` is the zero address. Throws if
+    ///  `_tokenId` is not a valid NFT.
+    /// @param _from The current owner of the NFT
+    /// @param _to The new owner
+    /// @param _tokenId The NFT to transfer
+    function transferFrom(
+        address _from,
+        address _to,
+        uint256 _tokenId
+    ) external onlyApproved(_tokenId) notZeroAddress(_to) {
+        require(
+            _from == WonderToOwner[_tokenId],
+            "from address not Wonder owner"
+        );
+        _transfer(_from, _to, _tokenId);
+    }
+}
