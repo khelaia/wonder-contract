@@ -1,4 +1,6 @@
-pragma solidity ^0.5.12;
+// SPDX-License-Identifier: MIT
+
+pragma solidity >=0.8.0 <0.9.0;
 
 import "./Ownable.sol";
 import "./WonderFactory.sol";
@@ -19,7 +21,7 @@ contract WonderMarketPlace is Ownable, IWonderMarketPlace {
     Offer[] offers;
     mapping(uint256 => Offer) tokenIdToOffer;
 
-    constructor(address _WonderContractAddress) public {
+    constructor(address _WonderContractAddress) {
         setWonderContract(_WonderContractAddress);
     }
 
@@ -65,17 +67,17 @@ contract WonderMarketPlace is Ownable, IWonderMarketPlace {
      * Get the details about a offer for _tokenId. Throws an error if there is no active offer for _tokenId.
      */
     function getOffer(uint256 _tokenId)
-        external
-        view
-        activeOffer(_tokenId)
-        returns (
-            address seller,
-            uint256 price,
-            uint256 index,
-            uint256 tokenId,
-            bool isSireOffer,
-            bool active
-        )
+    external
+    view
+    activeOffer(_tokenId)
+    returns (
+        address seller,
+        uint256 price,
+        uint256 index,
+        uint256 tokenId,
+        bool isSireOffer,
+        bool active
+    )
     {
         Offer storage offer = tokenIdToOffer[_tokenId];
         seller = offer.seller;
@@ -90,17 +92,17 @@ contract WonderMarketPlace is Ownable, IWonderMarketPlace {
      * Get all tokenId's that are currently for sale. Returns an empty arror if none exist.
      */
     function getAllTokenOnSale()
-        external
-        view
-        returns (uint256[] memory listOfOffers)
+    external
+    view
+    returns (uint256[] memory listOfOffers)
     {
         return _getActiveOffers(false);
     }
 
     function _getActiveOffers(bool isSireOffer)
-        internal
-        view
-        returns (uint256[] memory listOfOffers)
+    internal
+    view
+    returns (uint256[] memory listOfOffers)
     {
         if (offers.length == 0) {
             return new uint256[](0);
@@ -137,9 +139,9 @@ contract WonderMarketPlace is Ownable, IWonderMarketPlace {
      * Returns an empty array if none exist.
      */
     function getAllSireOffers()
-        external
-        view
-        returns (uint256[] memory listOfOffers)
+    external
+    view
+    returns (uint256[] memory listOfOffers)
     {
         return _getActiveOffers(true);
     }
@@ -152,10 +154,10 @@ contract WonderMarketPlace is Ownable, IWonderMarketPlace {
      * Requirement: Marketplace contract (this) needs to be an approved operator when the offer is created.
      */
     function setOffer(uint256 _price, uint256 _tokenId)
-        external
-        marketApproved
-        onlyTokenOwner(_tokenId)
-        noActiveOffer(_tokenId)
+    external
+    marketApproved
+    onlyTokenOwner(_tokenId)
+    noActiveOffer(_tokenId)
     {
         _setOffer(_price, _tokenId, "Create", false);
     }
@@ -167,7 +169,7 @@ contract WonderMarketPlace is Ownable, IWonderMarketPlace {
         bool isSireOffer
     ) internal {
         Offer memory newOffer = Offer(
-            msg.sender,
+            payable(msg.sender),
             _price,
             offers.length,
             _tokenId,
@@ -190,10 +192,10 @@ contract WonderMarketPlace is Ownable, IWonderMarketPlace {
      * Requirement: Marketplace contract (this) needs to be an approved operator when the offer is created.
      */
     function setSireOffer(uint256 _price, uint256 _tokenId)
-        external
-        marketApproved
-        onlyTokenOwner(_tokenId)
-        noActiveOffer(_tokenId)
+    external
+    marketApproved
+    onlyTokenOwner(_tokenId)
+    noActiveOffer(_tokenId)
     {
         require(_WonderContract.readyToBreed(_tokenId), "on cooldown");
 
@@ -206,9 +208,9 @@ contract WonderMarketPlace is Ownable, IWonderMarketPlace {
      * Requirement: Only the seller of _tokenId can remove an offer.
      */
     function removeOffer(uint256 _tokenId)
-        external
-        onlyTokenOwner(_tokenId)
-        activeOffer(_tokenId)
+    external
+    onlyTokenOwner(_tokenId)
+    activeOffer(_tokenId)
     {
         _setOfferInactive(_tokenId);
 
@@ -262,9 +264,9 @@ contract WonderMarketPlace is Ownable, IWonderMarketPlace {
      * Requirement: There must be an active sire offer for _sireTokenId
      */
     function buySireRites(uint256 _sireTokenId, uint256 _matronTokenId)
-        external
-        payable
-        activeOffer(_sireTokenId)
+    external
+    payable
+    activeOffer(_sireTokenId)
     {
         Offer memory offer = tokenIdToOffer[_sireTokenId];
         require(msg.value == offer.price, "payment must be exact");

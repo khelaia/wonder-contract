@@ -1,4 +1,5 @@
-pragma solidity >=0.5.0 <0.6.0;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.11;
 import "./Ownable.sol";
 
 contract WonderAdmin is Ownable {
@@ -8,7 +9,7 @@ contract WonderAdmin is Ownable {
     event WonderCreatorAdded(address creator);
     event WonderCreatorRemoved(address creator);
 
-    constructor() public {
+    constructor()  {
         // placeholder to reserve ID zero as an invalid value
         _addWonderCreator(address(0));
 

@@ -1,4 +1,5 @@
-pragma solidity ^0.5.0;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.11;
 /**
  * @dev Required interface of an ERC721 compliant contract.
  */
@@ -48,7 +49,7 @@ interface IERC721 {
     function ownerOf(uint256 tokenId) external view returns (address owner);
 
 
-     /* @dev Transfers `tokenId` token from `msg.sender` to `to`.
+    /* @dev Transfers `tokenId` token from `msg.sender` to `to`.
      *
      *
      * Requirements:

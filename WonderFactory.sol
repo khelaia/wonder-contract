@@ -1,12 +1,12 @@
-pragma solidity >=0.5.0 <0.6.0;
+// SPDX-License-Identifier: MIT
 
-import "./SafeMath.sol";
+pragma solidity >=0.8.0 <0.9.0;
+
+
 import "./WonderContract.sol";
 import "./WonderAdmin.sol";
 
 contract WonderFactory is WonderContract, WonderAdmin {
-    using SafeMath32 for uint32;
-    using SafeMath16 for uint16;
 
     uint256 public constant CREATION_LIMIT_GEN0 = 65535;
     uint256 public constant NUM_CATTRIBUTES = 10;
@@ -14,11 +14,8 @@ contract WonderFactory is WonderContract, WonderAdmin {
     uint256 public constant RANDOM_DNA_THRESHOLD = 7;
     uint256 internal _gen0Counter;
     uint256 public RENAME_AMOUNT = 0.1 ether;
-    address payable admin;
 
-    uint[10] public ATTRIBUTES = [30,30,30,30,20,15,30,30,20,20]; 
-    uint randNonce = 0;
-    uint public currentRand;
+    uint[10] public ATTRIBUTES = [10,29,10,19,19,19,10,26,24,14];
 
     // tracks approval for a WonderId in sire market offers
     mapping(uint256 => address) sireAllowedToAddress;
@@ -49,9 +46,7 @@ contract WonderFactory is WonderContract, WonderAdmin {
         uint32(4 days),
         uint32(7 days)
     ];
-    constructor() public{
-        admin = msg.sender;
-    }
+
     function wondersOf(address _owner) public view returns (uint256[] memory) {
         // get the number of kittes owned by _owner
         uint256 ownerCount = ownerWonderCount[_owner];
@@ -67,9 +62,9 @@ contract WonderFactory is WonderContract, WonderAdmin {
         while (count < ownerCount || i < wonders.length) {
             if (WonderToOwner[i] == _owner) {
                 ids[count] = i;
-                count = count.add(1);
+                count = count + 1;
             }
-            i = i.add(1);
+            i = i + 1;
         }
 
         return ids;
@@ -86,7 +81,7 @@ contract WonderFactory is WonderContract, WonderAdmin {
     {
         require(_gen0Counter < CREATION_LIMIT_GEN0, "gen0 limit exceeded");
 
-        _gen0Counter = _gen0Counter.add(1);
+        _gen0Counter = _gen0Counter + 1;
         return _createWonder(0, 0, 0, _genes, msg.sender);
     }
 
@@ -104,18 +99,17 @@ contract WonderFactory is WonderContract, WonderAdmin {
             cooldown = uint16(cooldowns.length - 1);
         }
 
-        Wonder memory Wonder = Wonder({
-            name: '',
+        Wonderx memory Wonder = Wonderx({
             genes: _genes,
-            birthTime: uint64(now),
-            cooldownEndTime: uint64(now),
+            birthTime: uint64(block.timestamp),
+            cooldownEndTime: uint64(block.timestamp),
             mumId: uint32(_mumId),
             dadId: uint32(_dadId),
             generation: uint16(_generation),
             cooldownIndex: cooldown
         });
-
-        uint256 newKittenId = wonders.push(Wonder) - 1;
+        wonders.push(Wonder);
+        uint256 newKittenId = wonders.length - 1;
         emit Birth('',_owner, newKittenId, _mumId, _dadId, _genes);
 
         _transfer(address(0), _owner, newKittenId);
@@ -129,8 +123,8 @@ contract WonderFactory is WonderContract, WonderAdmin {
     {
         require(_eligibleToBreed(_dadId, _mumId), "wonders not eligible");
 
-        Wonder storage dad = wonders[_dadId];
-        Wonder storage mum = wonders[_mumId];
+        Wonderx storage dad = wonders[_dadId];
+        Wonderx storage mum = wonders[_mumId];
 
         // set parent cooldowns
         _setBreedCooldownEnd(dad);
@@ -138,15 +132,32 @@ contract WonderFactory is WonderContract, WonderAdmin {
         _incrementBreedCooldownIndex(dad);
         _incrementBreedCooldownIndex(mum);
 
-        // reset sire approval to fase
+        // reset sire approval to false
         _sireApprove(_dadId, _mumId, false);
         _sireApprove(_mumId, _dadId, false);
+        
 
-        // get kitten attributes
-        uint256 newDna = _mixDna(dad.genes, mum.genes, now);
+        uint256 newDna = _mixDnaX(mum.genes,dad.genes);
         uint256 newGeneration = _getKittenGeneration(dad, mum);
 
         return _createWonder(_mumId, _dadId, newGeneration, newDna, msg.sender);
+    }
+
+    function _mixDnaX(uint256 _dadDna, uint256 _mumDna)
+        internal
+        view
+        returns (uint256)
+    {
+        
+        uint256 dadPart = _dadDna / 10000000000;
+        uint256 mumPart = _mumDna % 10000000000;
+
+        uint256 newDna = (dadPart * 10000000000) + mumPart;
+
+        uint256 ranNum =  10+(vrf()%100)%(ATTRIBUTES[0]-9);
+        
+        uint256 lastDNA = ranNum * 10 ** 18 + newDna % 10 ** 18;
+        return lastDNA;
     }
 
     function _eligibleToBreed(uint256 _dadId, uint256 _mumId)
@@ -168,53 +179,50 @@ contract WonderFactory is WonderContract, WonderAdmin {
     }
 
     function readyToBreed(uint256 _WonderId) public view returns (bool) {
-        return wonders[_WonderId].cooldownEndTime <= now;
+        return wonders[_WonderId].cooldownEndTime <= block.timestamp;
     }
 
-    function _setBreedCooldownEnd(Wonder storage _Wonder) internal {
+    function _setBreedCooldownEnd(Wonderx storage _Wonder) internal {
         _Wonder.cooldownEndTime = uint64(
-            now.add(cooldowns[_Wonder.cooldownIndex])
+            block.timestamp + cooldowns[_Wonder.cooldownIndex]
         );
     }
 
-    function _incrementBreedCooldownIndex(Wonder storage _Wonder) internal {
+    function _incrementBreedCooldownIndex(Wonderx storage _Wonder) internal {
         // only increment cooldown if not at the cap
         if (_Wonder.cooldownIndex < cooldowns.length - 1) {
-            _Wonder.cooldownIndex = _Wonder.cooldownIndex.add(1);
+            _Wonder.cooldownIndex = _Wonder.cooldownIndex + 1;
         }
     }
 
-    function _getKittenGeneration(Wonder storage _dad, Wonder storage _mum)
+    function _getKittenGeneration(Wonderx storage _dad, Wonderx storage _mum)
         internal
         view
         returns (uint256)
     {
         // generation is 1 higher than max of parents
         if (_dad.generation > _mum.generation) {
-            return _dad.generation.add(1);
+            return _dad.generation + 1;
         }
 
-        return _mum.generation.add(1);
+        return _mum.generation + 1;
     }
     
-    function randModule(uint min, uint max) internal returns(uint) {
-        uint rand =  min+uint(keccak256(abi.encodePacked(randNonce,block.timestamp,block.difficulty,msg.sender)))%(max-min);
-        randNonce++;
-        return rand;
+    function randModule(uint min, uint max) internal view returns(uint rand) {
+        rand =  min+vrf()%(max-min);
     }
     function _mixDna(
         uint256 _dadDna,
-        uint256 _mumDna,
-        uint256 _seed
-    ) internal returns (uint256) {
+        uint256 _mumDna
+    ) internal view returns (uint256) {
         (
-            uint16 dnaSeed,
+            uint256 dnaSeed,
             uint256 randomSeed,
             uint256 randomValues
-        ) = _getSeedValues(_seed);
+        ) = _getSeedValues();
         uint256[10] memory geneSizes = [uint256(2), 2, 2, 2, 2, 2, 2, 2, 2, 2];
         uint256[10] memory geneArray;
-        uint256 mask = 1;
+        // uint256 mask = 1;
         uint256 i;
 
         for (i = NUM_CATTRIBUTES; i > 0; i--) {
@@ -246,11 +254,14 @@ contract WonderFactory is WonderContract, WonderAdmin {
             uint256 dnaMod = 10**geneSizes[i - 1];
             if (randSeedValue >= RANDOM_DNA_THRESHOLD) {
                 // use random value
-                uint16 rand = uint16(randomValues % dnaMod);
-                rand = uint16(randModule(10,ATTRIBUTES[i-1]));
+                // uint16 rand = uint16(randomValues % dnaMod);
+                // if(rand > ATTRIBUTES[i-1]){
+                //     rand = rand % uint16(ATTRIBUTES[i-1]);
+                // }
+                uint16 rand = uint16(randModule(10,ATTRIBUTES[i-1]));
                 geneArray[i - 1] = rand;
                 
-            } else if (dnaSeed & mask == 0) {
+            } else if (dnaSeed % 2 == 0) {
                 // use gene from Mum
                 geneArray[i - 1] = uint16(_mumDna % dnaMod);
             } else {
@@ -265,7 +276,7 @@ contract WonderFactory is WonderContract, WonderAdmin {
             randomSeed = randomSeed / 10;
 
             // shift the DNA mask LEFT by 1 bit
-            mask = mask * 2;
+            dnaSeed = dnaSeed / 10;
         }
 
         // recombine DNA
@@ -283,27 +294,40 @@ contract WonderFactory is WonderContract, WonderAdmin {
 
         return newGenes;
     }
-
-    function _getSeedValues(uint256 _masterSeed)
-        internal
-        pure
+    function vrf() internal view returns (uint256 result) {
+        uint[1] memory bn;
+        bn[0] = block.number;
+        assembly {
+        let memPtr := mload(0x40)
+        if iszero(staticcall(not(0), 0xff, bn, 0x20, memPtr, 0x20)) {
+            invalid()
+        }
+            result := mload(memPtr)
+        }
+    }
+    function _getSeedValues()
+        public
+        view
         returns (
-            uint16 dnaSeed,
+            uint256 dnaSeed,
             uint256 randomSeed,
             uint256 randomValues
         )
     {
         
-        uint256 mod = 2**NUM_CATTRIBUTES - 1;
-        dnaSeed = uint16(_masterSeed % mod);
+        // uint256 mod = 2**NUM_CATTRIBUTES - 1;
         uint256 randMod = 10**NUM_CATTRIBUTES;
+        uint256 ran = vrf();
+        uint lastRand = ran%10;
+        dnaSeed = (ran % (10 ** (lastRand+NUM_CATTRIBUTES))) / 10 **lastRand;
+        // dnaSeed = uint16(_masterSeed % mod);
         randomSeed =
-            uint256(keccak256(abi.encodePacked(_masterSeed))) %
+             ran %
             randMod;
 
         uint256 valueMod = 10**DNA_LENGTH;
         randomValues =
-            uint256(keccak256(abi.encodePacked(_masterSeed, DNA_LENGTH))) %
+            ran %
             valueMod;
     }
 
@@ -337,17 +361,16 @@ contract WonderFactory is WonderContract, WonderAdmin {
 
 
 
-    function setName(uint256 _WonderId, string memory _Name) payable public {
-        require(isWonderOwner(_WonderId),"Only Wonder Owner Can Rename");
-        require(msg.value >= RENAME_AMOUNT, "Amount should be exactly 0.1 ether");
-        admin.transfer(msg.value);
-        Wonder storage _Wonder = wonders[_WonderId];
-        _Wonder.name = _Name;
-    }
+    // function setName(uint256 _WonderId, string memory _Name) payable public {
+    //     require(isWonderOwner(_WonderId),"Only Wonder Owner Can Rename");
+    //     require(msg.value >= RENAME_AMOUNT, "Amount should be exactly 0.1 ether");
+    //     payable(admin).transfer(msg.value);
+    //     Wonderx storage _Wonder = wonders[_WonderId];
+    //     _Wonder.wonderName = _Name;
+    // }
 
 
-    function addAttributes(uint index, uint256 maxGene) public {
-        require(msg.sender == admin,"Only Admin Can add Attributes");
+    function addAttributes(uint index, uint256 maxGene) public onlyWonderCreator {
         ATTRIBUTES[index] = maxGene;
     }
 }

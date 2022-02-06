@@ -1,13 +1,11 @@
-pragma solidity ^0.5.12;
-import "./SafeMath.sol";
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.11;
 import "./IERC721.sol";
 import "./IERC721Receiver.sol";
 
 contract WonderContract is IERC721 {
-    using SafeMath for uint256;
 
-    struct Wonder {
-        string name;
+    struct Wonderx {
         uint256 genes;
         uint64 birthTime;
         uint64 cooldownEndTime;
@@ -17,7 +15,7 @@ contract WonderContract is IERC721 {
         uint16 cooldownIndex;
     }
 
-    Wonder[] internal wonders;
+    Wonderx[] internal wonders;
     string _tokenName = "Wonders NFT";
     string _tokenSymbol = "WON";
 
@@ -32,30 +30,29 @@ contract WonderContract is IERC721 {
     mapping(uint256 => address) public WonderToApproved;
     mapping(address => mapping(address => bool)) private _operatorApprovals;
 
-    constructor() public {
+    constructor() {
         wonders.push(
-            Wonder({
-                name:'',
-                genes: 0,
-                birthTime: 0,
-                cooldownEndTime: 0,
-                mumId: 0,
-                dadId: 0,
-                generation: 0,
-                cooldownIndex: 0
-            })
+            Wonderx({
+        genes: 0,
+        birthTime: 0,
+        cooldownEndTime: 0,
+        mumId: 0,
+        dadId: 0,
+        generation: 0,
+        cooldownIndex: 0
+        })
         );
     }
     function tokenURI(string memory _tokenId) public pure returns (string memory url){
         url = string(abi.encodePacked("https://ipfs.io/ipfs/QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/",_tokenId));
     }
     function supportsInterface(bytes4 _interfaceId)
-        external
-        view
-        returns (bool)
+    external
+    view
+    returns (bool)
     {
         return (_interfaceId == _INTERFACE_ID_ERC165 ||
-            _interfaceId == _INTERFACE_ID_ERC721);
+        _interfaceId == _INTERFACE_ID_ERC721);
     }
 
     /// @dev throws if @param _address is the zero address
@@ -81,8 +78,8 @@ contract WonderContract is IERC721 {
     modifier onlyApproved(uint256 _WonderId) {
         require(
             isWonderOwner(_WonderId) ||
-                isApproved(_WonderId) ||
-                isApprovedOperatorOf(_WonderId),
+            isApproved(_WonderId) ||
+            isApprovedOperatorOf(_WonderId),
             "sender not Wonder owner OR approved"
         );
         _;
@@ -92,23 +89,21 @@ contract WonderContract is IERC721 {
      * @dev Returns the Wonder for the given WonderId
      */
     function getWonder(uint256 _WonderId)
-        external
-        view
-        returns (
-            string memory name,
-            uint256 WonderId,
-            uint256 genes,
-            uint64 birthTime,
-            uint64 cooldownEndTime,
-            uint32 mumId,
-            uint32 dadId,
-            uint16 generation,
-            uint16 cooldownIndex,
-            address owner
-        )
+    external
+    view
+    returns (
+        uint256 WonderId,
+        uint256 genes,
+        uint64 birthTime,
+        uint64 cooldownEndTime,
+        uint32 mumId,
+        uint32 dadId,
+        uint16 generation,
+        uint16 cooldownIndex,
+        address owner
+    )
     {
-        Wonder storage Wonder = wonders[_WonderId];
-        name = Wonder.name;
+        Wonderx storage Wonder = wonders[_WonderId];
         WonderId = _WonderId;
         genes = Wonder.genes;
         birthTime = Wonder.birthTime;
@@ -157,10 +152,10 @@ contract WonderContract is IERC721 {
      * - `tokenId` must exist.
      */
     function ownerOf(uint256 _tokenId)
-        external
-        view
-        validWonderId(_tokenId)
-        returns (address owner)
+    external
+    view
+    validWonderId(_tokenId)
+    returns (address owner)
     {
         return _ownerOf(_tokenId);
     }
@@ -185,9 +180,9 @@ contract WonderContract is IERC721 {
      * Emits a {Transfer} event.
      */
     function transfer(address _to, uint256 _tokenId)
-        external
-        onlyApproved(_tokenId)
-        notZeroAddress(_to)
+    external
+    onlyApproved(_tokenId)
+    notZeroAddress(_to)
     {
         require(_to != address(this), "to contract address");
 
@@ -203,10 +198,10 @@ contract WonderContract is IERC721 {
         WonderToOwner[_tokenId] = _to;
 
         //update token counts
-        ownerWonderCount[_to] = ownerWonderCount[_to].add(1);
+        ownerWonderCount[_to] = ownerWonderCount[_to] + 1;
 
         if (_from != address(0)) {
-            ownerWonderCount[_from] = ownerWonderCount[_from].sub(1);
+            ownerWonderCount[_from] = ownerWonderCount[_from] - 1;
         }
 
         // emit Transfer event
@@ -220,8 +215,8 @@ contract WonderContract is IERC721 {
     /// @param _approved The new approved NFT controller
     /// @param _tokenId The NFT to approve
     function approve(address _approved, uint256 _tokenId)
-        external
-        onlyApproved(_tokenId)
+    external
+    onlyApproved(_tokenId)
     {
         WonderToApproved[_tokenId] = _approved;
         emit Approval(msg.sender, _approved, _tokenId);
@@ -247,10 +242,10 @@ contract WonderContract is IERC721 {
     /// @param _tokenId The NFT to find the approved address for
     /// @return The approved address for this NFT, or the zero address if there is none
     function getApproved(uint256 _tokenId)
-        external
-        view
-        validWonderId(_tokenId)
-        returns (address)
+    external
+    view
+    validWonderId(_tokenId)
+    returns (address)
     {
         return WonderToApproved[_tokenId];
     }
@@ -260,17 +255,17 @@ contract WonderContract is IERC721 {
     /// @param _operator The address that acts on behalf of the owner
     /// @return True if `_operator` is an approved operator for `_owner`, false otherwise
     function isApprovedForAll(address _owner, address _operator)
-        external
-        view
-        returns (bool)
+    external
+    view
+    returns (bool)
     {
         return _isApprovedForAll(_owner, _operator);
     }
 
     function _isApprovedForAll(address _owner, address _operator)
-        internal
-        view
-        returns (bool)
+    internal
+    view
+    returns (bool)
     {
         return _operatorApprovals[_owner][_operator];
     }
